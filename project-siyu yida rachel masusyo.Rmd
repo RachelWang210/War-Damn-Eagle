@@ -1,0 +1,488 @@
+---
+title: "War Damn Eagle"
+subtitle: A path to success
+output:
+  github_document: default
+  word_document: default
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+
+
+Today,we talk about basketball.We know that "March Madness" is the most important stage for college basketball NCAA. We are from Auburn. We naturally have expectations for Auburn Tiger's performance this year. The dataset is very interesting since it's so clarity and meanwhile, contains so much useful information. In this project, we will use methods of data visualization instead of icy statistics output to compare the game data of Auburn and those top teams.And explore the reason why we can expect something from auburn tiger this season.
+
+Let's begin!
+
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo=FALSE, error=FALSE)
+knitr::opts_chunk$set(out.width="100%", fig.height = 4.5, split=FALSE, fig.align = 'default')
+```
+```{r Libraries}
+library('ggplot2') # visualisation
+library('scales') # visualisation
+library('patchwork') # visualisation
+library('RColorBrewer') # visualisation
+library('corrplot') # visualisation
+library('ggthemes') # visualisation
+library('ggrepel') # visualisation
+
+# general data manipulation
+library('dplyr') # data manipulation
+library('readr') # input/output
+library('vroom') # input/output
+library('skimr') # overview
+library('tibble') # data wrangling
+library('tidyr') # data wrangling
+library('stringr') # string manipulation
+library('forcats') # factor manipulation
+
+# specific visualisation
+library('alluvial') # visualisation
+library('ggrepel') # visualisation
+library('ggforce') # visualisation
+library('ggridges') # visualisation
+library('gganimate') # animations
+library('GGally') # visualisation
+library('ggExtra') # visualisation
+library('viridis') # visualisation
+library('usmap') # geo
+
+# specific data manipulation
+library('lazyeval') # data wrangling
+library('broom') # data wrangling
+library('purrr') # data wrangling
+library('reshape2') # data wrangling
+library('rlang') # encoding
+library('kableExtra') # display
+
+# modelling
+library(xgboost) # model
+library(parsnip) # model
+library(yardstick) # metrics
+```
+```{r}
+##get_binCI <- function(x,n) as.list(setNames(binom.test(x,n)$conf.int, c("lwr", "upr")))
+path<-""
+subpath<-"MDataFiles_Stage1/"
+subpath2<-"WDataFiles_Stage1/"
+```
+
+```{r Load}
+teams <- vroom(str_c(path, subpath, "MTeams.csv"), col_types = cols())
+seasons <- vroom(str_c(path, subpath, "MSeasons.csv"), col_types = cols())
+seeds <- vroom(str_c(path, subpath, "MNCAATourneySeeds.csv"), col_types = cols())
+regular_res <- vroom(str_c(path, subpath, "MRegularSeasonCompactResults.csv"), col_types = cols())
+bracket_res <- vroom(str_c(path, subpath, "MNCAATourneyCompactResults.csv"), col_types = cols())
+
+teamsw <- vroom(str_c(path, subpath2, "WTeams.csv"), col_types = cols())
+seasonsw <- vroom(str_c(path, subpath2, "WSeasons.csv"), col_types = cols())
+seedsw <- vroom(str_c(path, subpath2, "WNCAATourneySeeds.csv"), col_types = cols())
+regular_resw <- vroom(str_c(path, subpath2, "WRegularSeasonCompactResults.csv"), col_types = cols())
+bracket_resw <- vroom(str_c(path, subpath2, "WNCAATourneyCompactResults.csv"), col_types = cols())
+
+regular_detail <- vroom(str_c(path, subpath, "MRegularSeasonDetailedResults.csv"), col_types = cols())
+bracket_detail <- vroom(str_c(path, subpath, "MNCAATourneyDetailedResults.csv"), col_types = cols())
+cities <- vroom(str_c(path, subpath, "Cities.csv"), col_types = cols())
+cities_games <- vroom(str_c(path, subpath, "MGameCities.csv"), col_types = cols())
+ranks <- vroom(str_c(path, subpath, "MMasseyOrdinals.csv"), col_types = cols())
+
+
+events15 <- vroom(str_c(path, "MEvents2015.csv"), col_types = cols())
+events16 <- vroom(str_c(path, "MEvents2016.csv"), col_types = cols())
+events17 <- vroom(str_c(path, "MEvents2017.csv"), col_types = cols())
+events18 <- vroom(str_c(path, "MEvents2018.csv"), col_types = cols())
+events19 <- vroom(str_c(path, "MEvents2019.csv"), col_types = cols())
+
+players <- vroom(str_c(path, "MPlayers.csv"), col_types = cols())
+```
+
+
+Our first step is to apply a lot of packages in R studio and input the data csv. We sperate the package into several classsification. Frankly speaking, here we have borrowed a lot hint of "Jump Shot to Conclusions" this awesome notebook, and we also use this notebook to determine the basic tone of this project.
+
+
+# Introduction
+
+Auburn has been participated in the NCAA competion since 1985- 2020
+#Seeding
+```{r}
+foo <- seeds %>% 
+  mutate(seed = str_sub(Seed, 2,3)) %>% 
+  group_by(TeamID, seed) %>% 
+  count() %>% 
+  ungroup() %>% 
+  arrange(seed, desc(n))
+
+top_seeds <- foo %>% 
+  head(9) %>%
+  distinct(TeamID)
+AuburnID<-foo %>% filter(TeamID==1120) %>%
+  distinct(TeamID)
+
+p1<-seeds %>% 
+  mutate(seed = as.integer(str_sub(Seed, 2,3))) %>% 
+  inner_join(teams %>% select(TeamID, TeamName), by = "TeamID") %>% 
+  inner_join(top_seeds, by = "TeamID")  %>% 
+  #filter(TeamName == "Duke") %>% 
+  ggplot(aes(Season, seed, col = TeamName, group = TeamName)) +
+  geom_line() +
+  geom_point() +
+  scale_y_reverse(breaks = seq(1,15,2)) +
+  theme_fivethirtyeight() +
+  theme(legend.position = "none") +
+  facet_wrap(~TeamName) +
+  labs(x = "Season", y = "Seed", title = "Seeding of top teams")
+p2<-seeds %>% 
+  mutate(seed = as.integer(str_sub(Seed, 2,3))) %>% 
+  inner_join(teams %>% select(TeamID, TeamName), by = "TeamID") %>% 
+  inner_join(AuburnID, by = "TeamID")  %>% 
+  #filter(TeamName == "Duke") %>% 
+  ggplot(aes(Season, seed, col = TeamName, group = TeamName)) +
+  geom_line() +
+  geom_point() +
+  scale_y_reverse(breaks = seq(1,15,2)) +
+  theme_fivethirtyeight() +
+  theme(legend.position = "none") +
+  facet_wrap(~TeamName) +
+  labs(x = "Season", y = "Seed", title = "Auburn seeding")
+p1+p2
+```
+
+The basic idea of this project is to compare the stat of auburn's game with those of the traditional top teams, then maybe someone would wonder that which teams belong to the traditional strong teams?
+
+This is a good question. We use a seed graph to express our point. If a team can be called a top team, then they must be a seed team that year.
+
+From the graph, we find Arizona, Connecticut, Duke, Kansas, Kentuck, Michigan St, North Carolina, Ohio st and Okalahoma as top team.They are well-known among basketball fans and have a large number of fans. More importantly, seeding gradph should also support these judgments. It's easily for us to find out that those top team win several time first seed from 1985 - 2020, and  long time cross dominated the top five positions. 
+
+For Auburn, it's not that good. From the graph, we can find that Auburn only got one time first seed in 30 year. Even if we relax the criteria, there are only a handful times of Auburn entries in the top five.There is no doubt that compared to these traditional top teams, Auburn's basketball history seems less glorious. But this does not affect our rise. Under the leadership of Bruce Pearl, a meritorious coach, Auburn has given us too many surprises in recent years.
+
+# Shoot Stats
+## Top teams 
+```{r fig.cap ="Fig. 23", fig.height = 4.5}
+foo <- regular_detail %>% 
+  select(Season, starts_with("W")) %>% mutate(TeamID=WTeamID) %>%
+  mutate(WFGM = WFGM - WFGM3,
+         WFGA = WFGA - WFGA3) %>% 
+  mutate(WFGR = WFGM/WFGA,
+         WFGR3 = WFGM3/WFGA3) %>% 
+  select(-matches("GM")) %>% 
+  pivot_longer(starts_with("WFG"), names_to = "type", values_to = "points") %>% 
+  mutate(shot = if_else(str_detect(type, "3"), "3-pointers", "2-pointers"),
+         rate = if_else(str_detect(type, "R"), "success rate", "shot attempts")) 
+
+bar <- regular_detail %>% 
+  select(Season, starts_with("L")) %>% mutate(TeamID=LTeamID) %>%
+  mutate(LFGM = LFGM - LFGM3,
+         LFGA = LFGA - LFGA3) %>% 
+  mutate(LFGR = LFGM/LFGA,
+         LFGR3 = LFGM3/LFGA3) %>% 
+  select(-matches("GM")) %>% 
+  pivot_longer(starts_with("LFG"), names_to = "type", values_to = "points") %>% 
+  mutate(shot = if_else(str_detect(type, "3"), "3-pointers", "2-pointers"),
+         rate = if_else(str_detect(type, "R"), "success rate", "shot attempts"))
+
+foobar <- foo %>% 
+  bind_rows(bar) %>% 
+  mutate(team = fct_rev(as.factor(if_else(str_detect(type, "W"), "winner", "loser"))))
+
+p1 <- foobar %>%
+  inner_join(teams %>% select(TeamID, TeamName), by = "TeamID") %>% 
+  inner_join(top_seeds, by = "TeamID")  %>%
+  filter(rate == "success rate") %>% 
+  ggplot(aes(shot, points, fill = team)) +
+  geom_boxplot() +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent) +
+  facet_wrap(~ shot, scales = "free_y", nrow = 2) +
+  labs(x = "", y = "", fill = "", title = "Shot percentage") +
+  theme(legend.position = "none") +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+
+p2 <- foobar %>% 
+  inner_join(teams %>% select(TeamID, TeamName), by = "TeamID") %>% 
+  inner_join(top_seeds, by = "TeamID")  %>%
+  filter(rate == "shot attempts") %>% 
+  ggplot(aes(shot, points, fill = team)) +
+  geom_boxplot() +
+  coord_flip() +
+  facet_wrap(~ shot, scales = "free", nrow = 2) +
+  labs(x = "", y = "", fill = "", title = "Number of shot attempts") +
+  theme(legend.position = "none") +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+(p1 + p2+ plot_annotation(title = 'Regular season top team shot statistics: top team (red) vs opponent (blue)'))
+```
+
+
+We first compare the shooting options and the summary of the shooting rate.The right half refers to the shot selection. We know that basketball can be roughly divided into two scoring methods, two points for close shots, and three points for long shots. From the graph, Top teams tend to be more efficient, after all, basketball is a game that scores high to win. Each team desire to be able to score three points in each round, but it is undeniable that close scores are often more trustworthy than long shots. 
+
+This is also applied in the picture. The top team's two-point shot attempt will be more than the opponent, and the three-point choice will be slightly less than the opponent.
+
+However, some people may have doubts that they seem to be at the same level in this statistic. I must agree with this view, because the real difference between strength and weakness is shooting percentage.
+
+
+We can see that the shot percentage for the top team has completely crushed their opponents, whether they are two-point or three-pointers.The top team's average field goal percentage is even higher than their opponent's maximum field goal in boxplot.
+
+This is really a big gap. Of course, this does not prove that everyone on the top team has a very good shooting ability.
+
+Basketball is divided into offense and defense. The offense is reflected in high shooting percentage and destroying the opponent's defense. But good defense can also greatly inhibit opponents' offense and reduce their shooting percentage.
+
+This is a complementary system.
+
+Now let's talk about Auburn.
+
+
+## Auburn
+```{r}
+p3 <- foobar %>%
+  inner_join(teams %>% select(TeamID, TeamName), by = "TeamID") %>% 
+  inner_join(AuburnID, by = "TeamID")  %>%
+  filter(rate == "success rate") %>% 
+  ggplot(aes(shot, points, fill = team)) +
+  geom_boxplot() +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent) +
+  facet_wrap(~ shot, scales = "free_y", nrow = 2) +
+  labs(x = "", y = "", fill = "", title = "Shot percentage") +
+  theme(legend.position = "none") +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+
+p4 <- foobar %>% 
+  inner_join(teams %>% select(TeamID, TeamName), by = "TeamID") %>% 
+  inner_join(AuburnID, by = "TeamID")  %>%
+  filter(rate == "shot attempts") %>% 
+  ggplot(aes(shot, points, fill = team)) +
+  geom_boxplot() +
+  coord_flip() +
+  facet_wrap(~ shot, scales = "free", nrow = 2) +
+  labs(x = "", y = "", fill = "", title = "Number of shot attempts") +
+  theme(legend.position = "none") +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+
+
+(p3+p4+ plot_annotation(title = 'Regular season Auburn shot statistics: Auburn (red) vs opponent (blue)'))
+ 
+```
+
+
+We can be surprised to find that the comparison between auburn and his opponent is highly similar to that of the top team.A little different is that auburn has done even more thorough in pursuit of efficiency. We can find that the maximum value of auburn's three-point attempt in boxplot is significantly less than the opponent.
+
+There is also an outlier, which also confirms that auburn players can shoot three points in some game, because their three-point shooting percentage is significantly higher than the opponent.
+
+But why give up more easy scoring?
+
+Scoring stat is the most important variable for measuring a team. Judging from Auburn's performance, it is absolutely deserved that their top team is worth its rank for this year.
+
+# Top teams
+```{r fig.cap ="Fig. 24", fig.height = 5.5}
+foobar %>% 
+  inner_join(teams %>% select(TeamID, TeamName), by = "TeamID") %>% 
+  inner_join(top_seeds, by = "TeamID")  %>%
+  filter(rate == "success rate") %>% 
+  group_by(Season, shot, team) %>% 
+  summarise(mean_rate = mean(points),
+            sd_rate = sd(points)) %>% 
+  ungroup() %>% 
+  mutate(Season = if_else(team == "winner", Season + 0.2, Season)) %>% 
+  ggplot(aes(Season, mean_rate, col = team)) +
+  geom_point() +
+  scale_y_continuous(labels = scales::percent) +
+  geom_errorbar(aes(ymin = mean_rate - sd_rate, ymax = mean_rate + sd_rate)) +
+  facet_wrap(~ shot, nrow = 2, scales = "free") +
+  theme_fivethirtyeight() +
+  labs(x = "", y = "", title = "Shot percentages over time",
+       subtitle = "Mean percentages with standard deviation error bars")
+```
+
+
+Next, we used a different plot to analyze how top teams and their opponents shot stat in overtime. Overtime is different from regular time, it  tests the psychological quality of players and the coach's ability to mobilize the lead singer.In the graph above, It looks like the top team is better than their opponents on this stat.This seems reasonable Because we already have shown the same result. But from my point of view, this is not easy. When will the two sides fight over time? The two sides were tied in regular time, which also implied that in the 30-minute match, the strength of the two sides seemed to be equal.
+
+
+It ’s hard to explain, maybe it can only be explained by the top team ’s heritage. because their heritage, they can even show more dominance performance in overtime game.
+
+# Auburn
+```{r fig.cap ="Fig. 24", fig.height = 5.5}
+foobar %>% 
+  inner_join(teams %>% select(TeamID, TeamName), by = "TeamID") %>% 
+  inner_join(AuburnID, by = "TeamID")  %>%
+  filter(rate == "success rate") %>% 
+  group_by(Season, shot, team) %>% 
+  summarise(mean_rate = mean(points),
+            sd_rate = sd(points)) %>% 
+  ungroup() %>% 
+  mutate(Season = if_else(team == "winner", Season + 0.2, Season)) %>% 
+  ggplot(aes(Season, mean_rate, col = team)) +
+  geom_point() +
+  scale_y_continuous(labels = scales::percent) +
+  geom_errorbar(aes(ymin = mean_rate - sd_rate, ymax = mean_rate + sd_rate)) +
+  facet_wrap(~ shot, nrow = 2, scales = "free") +
+  theme_fivethirtyeight() +
+  labs(x = "", y = "", title = "Shot percentages over time",
+       subtitle = "Mean percentages with standard deviation error bars")
+```
+
+
+It doesn't seem to be that surprising anymore, auburn's performance in overtime is the same as those of the top teams.
+This is the result we want, which shows the toughness of auburn and the big heart of the players.
+
+# Top teams
+```{r fig.cap ="Fig. 25", fig.height = 5}
+p1 <- regular_detail %>% 
+  select(Season, matches("FT"),matches("WTeamID")) %>% rename(TeamID=WTeamID) %>%
+  inner_join(teams %>% select(TeamID, TeamName), by = "TeamID") %>% 
+  inner_join(top_seeds, by = "TeamID")  %>%
+  mutate(WFTR = WFTM/WFTA,
+         LFTR = LFTM/LFTA) %>% 
+  select(Season, ends_with("TR")) %>% 
+  pivot_longer(ends_with("TR"), names_to = "team", values_to = "ft") %>% 
+  mutate(team = fct_rev(as.factor(if_else(str_detect(team, "W"), "winner", "loser")))) %>% 
+  filter(ft > 0) %>% 
+  ggplot(aes(ft, fill = team)) +
+  geom_density(bw = .05, alpha = 0.5) +
+  scale_x_continuous(labels = scales::percent) +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
+  labs(x = "", y = "", title = "Free Throw percentage")
+
+p2 <- regular_detail %>% 
+  
+  select(Season, matches("OR"), matches("DR"), -matches("Score"),matches("WTeamID")) %>%
+  rename(TeamID=WTeamID) %>%
+  inner_join(teams %>% select(TeamID, TeamName), by = "TeamID") %>% 
+  inner_join(top_seeds, by = "TeamID")  %>%
+  rename(W_OR = WOR, L_OR = LOR, W_DR = WDR, L_DR = LDR) %>% 
+  pivot_longer(matches("^[WL]."), names_to = c("win_lose", ".value"), names_pattern = "(.)_(.+)") %>% 
+  mutate(team = fct_rev(as.factor(if_else(str_detect(win_lose, "W"), "winner", "loser")))) %>% 
+  pivot_longer(cols = c(OR, DR), names_to = "type", values_to = "rebounds") %>% 
+  mutate(type = if_else(type == "OR", "Offensive Rebounds", "Defensive Rebounds")) %>% 
+  ggplot(aes(rebounds, fill = team)) +
+  geom_density(bw = 1, alpha = 0.5) +
+  facet_wrap(~type) +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
+  labs(x = "", y = "", title = "# Rebounds")
+
+win_vs_lose <- function(df, feat, title_name, bw){
+  df %>% 
+    select(Season, contains(feat),matches("WTeamID")) %>%
+    rename(TeamID=WTeamID) %>%
+    inner_join(teams %>% select(TeamID, TeamName), by = "TeamID") %>% 
+    inner_join(top_seeds, by = "TeamID")  %>%
+    pivot_longer(contains(feat), names_to = "team", values_to = "feat") %>% 
+    mutate(team = fct_rev(as.factor(if_else(str_detect(team, "W"), "winner", "loser")))) %>% 
+    ggplot(aes(feat, fill = team)) +
+    geom_density(bw = bw, alpha = 0.5) +
+    theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
+    labs(x = "", y = "", title = title_name)
+}
+
+p3 <- win_vs_lose(regular_detail, "Ast", "Assists", 1)
+
+p4 <- win_vs_lose(regular_detail, "TO", "Turnovers", 1)
+
+p5 <- win_vs_lose(regular_detail, "Stl", "Steals", 1)
+
+p6 <- win_vs_lose(regular_detail, "Blk", "Blocks", 1)
+
+p7 <- win_vs_lose(regular_detail, "PF", "Fouls", 1)
+
+layout <- "
+ABB
+CDE
+FGH
+"
+
+p1 + p2 + p3 + p4 + p5 + p6 + p7 + guide_area() +
+  plot_layout(design = layout, guides = 'collect') +
+  plot_annotation(title = 'Regular Season stats - collected overview')
+  
+```
+
+This picture is more comprehensive than the previous two.
+
+
+Free throws are a scoring method that tests the basic skills of players. The top teams often do not allow backwards and opponents in such places.
+
+In Slam Dunk, Akagi Akagi once said that a team that can control the rebound can control the game. Yes, more rebounds means more round to attack. We can see that the strong teams have more rebounds than their opponents. 
+
+The same result goes for assist,blocks and steal stat.
+
+It is worthwhile to note that the top team is also significantly less than their opponents in the two negative data of fouls and turnovers. 
+
+It can be said that the top team's competition has shown incredible dominance over their opponents. Transcendence has been formed in each item of data.
+
+# Auburn
+```{r fig.cap ="Fig. 25", fig.height = 5}
+p1 <- regular_detail %>% 
+  select(Season, matches("FT"),matches("WTeamID")) %>% rename(TeamID=WTeamID) %>%
+  inner_join(teams %>% select(TeamID, TeamName), by = "TeamID") %>% 
+  inner_join(top_seeds, by = "TeamID")  %>%
+  mutate(WFTR = WFTM/WFTA,
+         LFTR = LFTM/LFTA) %>% 
+  select(Season, ends_with("TR")) %>% 
+  pivot_longer(ends_with("TR"), names_to = "team", values_to = "ft") %>% 
+  mutate(team = fct_rev(as.factor(if_else(str_detect(team, "W"), "winner", "loser")))) %>% 
+  filter(ft > 0) %>% 
+  ggplot(aes(ft, fill = team)) +
+  geom_density(bw = .05, alpha = 0.5) +
+  scale_x_continuous(labels = scales::percent) +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
+  labs(x = "", y = "", title = "Free Throw percentage")
+
+p2 <- regular_detail %>% 
+  
+  select(Season, matches("OR"), matches("DR"), -matches("Score"),matches("WTeamID")) %>%
+  rename(TeamID=WTeamID) %>%
+  inner_join(teams %>% select(TeamID, TeamName), by = "TeamID") %>% 
+  inner_join(top_seeds, by = "TeamID")  %>%
+  rename(W_OR = WOR, L_OR = LOR, W_DR = WDR, L_DR = LDR) %>% 
+  pivot_longer(matches("^[WL]."), names_to = c("win_lose", ".value"), names_pattern = "(.)_(.+)") %>% 
+  mutate(team = fct_rev(as.factor(if_else(str_detect(win_lose, "W"), "winner", "loser")))) %>% 
+  pivot_longer(cols = c(OR, DR), names_to = "type", values_to = "rebounds") %>% 
+  mutate(type = if_else(type == "OR", "Offensive Rebounds", "Defensive Rebounds")) %>% 
+  ggplot(aes(rebounds, fill = team)) +
+  geom_density(bw = 1, alpha = 0.5) +
+  facet_wrap(~type) +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
+  labs(x = "", y = "", title = "# Rebounds")
+
+win_vs_lose <- function(df, feat, title_name, bw){
+  df %>% 
+    select(Season, contains(feat),matches("WTeamID")) %>%
+    rename(TeamID=WTeamID) %>%
+    inner_join(teams %>% select(TeamID, TeamName), by = "TeamID") %>% 
+    inner_join(AuburnID, by = "TeamID")  %>%
+    pivot_longer(contains(feat), names_to = "team", values_to = "feat") %>% 
+    mutate(team = fct_rev(as.factor(if_else(str_detect(team, "W"), "winner", "loser")))) %>% 
+    ggplot(aes(feat, fill = team)) +
+    geom_density(bw = bw, alpha = 0.5) +
+    theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
+    labs(x = "", y = "", title = title_name)
+}
+
+p3 <- win_vs_lose(regular_detail, "Ast", "Assists", 1)
+
+p4 <- win_vs_lose(regular_detail, "TO", "Turnovers", 1)
+
+p5 <- win_vs_lose(regular_detail, "Stl", "Steals", 1)
+
+p6 <- win_vs_lose(regular_detail, "Blk", "Blocks", 1)
+
+p7 <- win_vs_lose(regular_detail, "PF", "Fouls", 1)
+
+layout <- "
+ABB
+CDE
+FGH
+"
+
+p1 + p2 + p3 + p4 + p5 + p6 + p7 + guide_area() +
+  plot_layout(design = layout, guides = 'collect') +
+  plot_annotation(title = 'Regular Season stats - collected overview')
+  
+```
+
+
+Same story, Auburn, like those top teams, formed a full range of overtakes on his opponents.I can't express my joy in any words.
+
+
+Summary :
+We have not done much in-depth analysis, but I think the result of our project is still very meaningful. This is a data visualization project. We compared the game data of the top team and their opponents, and then we did the same for auburn.From the results in the figure, we can say that aubun already possesses some of the characteristics of the top teams.
